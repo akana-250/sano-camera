@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="rw">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phone to PC Camera</title>
+  <!-- PeerJS yo guhuza video -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- QR Code generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+    video { width: 90%; max-width: 700px; border: 3px solid #00ff88; border-radius: 10px; margin-top: 10px; }
+    #linkBox { background: #222; padding: 15px; margin: 15px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Phone Camera -> PC</h1>
+  <div id="status">Irimo gutangira...</div>
+  <div id="linkBox" style="display:none;">
+    <p>Scan kuri PC yawe:</p>
+    <div id="qrcode" style="display:flex; justify-content:center; background:#fff; padding:10px;"></div>
+    <p>ID ya Phone: <b id="myId"></b></p>
+  </div>
+  <video id="myVideo" autoplay playsinline muted></video>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const videoEl = document.getElementById('myVideo');
+    const params = new URLSearchParams(window.location.search);
+    const viewId = params.get('view'); // Niba uri kuri PC, URL iba ?view=PHONE_ID
+
+    // Kora Peer nshya (connection)
+    const peer = new Peer();
+
+    peer.on('open', async (id) => {
+      // MODE 1: URI KURI PHONE (SENDER)
+      if (!viewId) {
+        statusEl.innerText = "Uri kuri PHONE. Fungura camera...";
+        try {
+          // 1. Saba camera ya phone
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+          videoEl.srcObject = stream;
+
+          // 2. Erekana ID na QR Code kuri phone kugirango PC iscane
+          document.getElementById('linkBox').style.display = 'block';
+          document.getElementById('myId').innerText = id;
+          
+          // Kora link PC izafungura
+          const pcLink = window.location.origin + window.location.pathname + '?view=' + id;
+          new QRCode(document.getElementById("qrcode"), pcLink);
+          statusEl.innerText = "Scan QR kuri PC yawe";
+
+          // 3. Tegereza ko PC ihamagara, uyisubize na video
+          peer.on('call', (call) => {
+            call.answer(stream); // Ohereza video kuri PC
+            statusEl.innerText = "PC yahuzwe! Live...";
+          });
+
+        } catch (err) {
+          statusEl.innerText = "Ntibyemerewe: Emeza camera. Kandi ukoreshe HTTPS.";
+          console.error(err);
+        }
+      } 
+      // MODE 2: URI KURI PC (VIEWER)
+      else {
+        statusEl.innerText = "Uri kuri PC. Irimo guhuza na phone: " + viewId;
+        // Hamagara phone, ntacyo wohereza (null) urategereza kwakira gusa
+        const call = peer.call(viewId, null);
+        
+        call.on('stream', (remoteStream) => {
+          // Erekana video ya phone kuri PC
+          videoEl.srcObject = remoteStream;
+          statusEl.innerText = "Live! U connected.";
+        });
+
+        call.on('error', () => {
+          statusEl.innerText = "Ntabwo Phone ibonetse. Reba niba ikiri online.";
+        });
+      }
+    });
+  </script>
+</body>
+</html>
